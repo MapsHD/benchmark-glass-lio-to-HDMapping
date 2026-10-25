@@ -1,136 +1,64 @@
-## Hint
+# glass-lio to HDMapping simplified instruction
 
-Please change branch to [Bunker-DVI-Dataset-reg-1](https://github.com/MapsHD/benchmark-glass-lio-to-HDMapping/tree/Bunker-DVI-Dataset-reg-1) for quick experiment.
+## Step 1 (prepare data)
+Download the dataset `reg-1.bag` by clicking [link](https://cloud.cylab.be/public.php/dav/files/7PgyjbM2CBcakN5/reg-1.bag) or from the [Zenodo](https://zenodo.org/records/23069933) mirror (it is part of [Bunker DVI Dataset](https://charleshamesse.github.io/bunker-dvi-dataset)) and convert with [tool](https://github.com/MapsHD/livox_bag_aggregate) to `reg-1.bag-pc.bag`.
 
-## Example Dataset:
-
-Download the dataset from [Bunker DVI Dataset](https://charleshamesse.github.io/bunker-dvi-dataset/)
-
-# benchmark-glass-lio-to-HDMapping
-
-Runs the [glass-lio](https://github.com/Tim-HW/glass-lio) LiDAR-inertial
-odometry on a ROS 2 (or ROS 1) bag and converts the output to an
-[HDMapping](https://github.com/MapsHD/HDMapping) session.
-
-glass-lio is a scan-to-map LiDAR-inertial odometry for Livox sensors: gyro
-deskew, a voxel-plane local map, and point-to-plane registration solved by
-Gauss-Newton on SE(3), tightly coupled with on-manifold IMU preintegration. Its
-estimation engine, glass_core, is a git submodule of glass-lio.
-
-## Prerequisites
-
-- Docker
-- A ROS 2 bag directory (or a ROS 1 bag, converted to ROS 2 automatically)
-  with a `sensor_msgs/Imu` topic and a `sensor_msgs/PointCloud2` LiDAR topic in
-  the livox_ros_driver2 PointCloud2 layout (float64 per-point `timestamp` in
-  nanoseconds). A `/livox/pointcloud` in the older livox_ros_driver layout
-  (float32 per-point `time` offset) is converted to that layout on the fly.
-
-## Step 1 — Clone with submodules
+On Zenodo the bag archive is split into `reg-1.zip.part-000`, `reg-1.zip.part-001`, etc.,
+download all parts, then merge and extract them:
 
 ```bash
-git clone https://github.com/MapsHD/benchmark-glass-lio-to-HDMapping.git --recursive
-cd benchmark-glass-lio-to-HDMapping
+cd ~/Downloads
+cat reg-1.zip.part-0* > full.zip
+zip -F full.zip --out full-fixed.zip
+unzip full-fixed.zip
 ```
 
-## Step 2 — Build the Docker image
+File `reg-1.bag-pc.bag` is an input for further calculations.
+It should be located in `~/hdmapping-benchmark/data`.
 
-```bash
+## Step 2 (prepare docker)
+```shell
+mkdir -p ~/hdmapping-benchmark
+cd ~/hdmapping-benchmark
+git clone https://github.com/MapsHD/benchmark-glass-lio-to-HDMapping.git --recursive
+cd benchmark-glass-lio-to-HDMapping
+git checkout Bunker-DVI-Dataset-reg-1
 docker build -t glass-lio_humble .
 ```
 
-This installs:
-- Ubuntu 22.04 + ROS 2 Humble
-- Eigen3, PCL
-- colcon workspace with `glasslio` (including glass_core) and `glass_lio_to_hdmapping`
-
-## Step 3 — Run the pipeline
-
-```bash
+## Step 3 (run docker, file `reg-1.bag-pc.bag` should be in `~/hdmapping-benchmark/data`)
+```shell
+cd ~/hdmapping-benchmark/benchmark-glass-lio-to-HDMapping
 chmod +x docker_session_run-ros2-glass-lio.sh
-./docker_session_run-ros2-glass-lio.sh /path/to/ros2_bag_dir /path/to/output/dir
+cd ~/hdmapping-benchmark/data
+~/hdmapping-benchmark/benchmark-glass-lio-to-HDMapping/docker_session_run-ros2-glass-lio.sh reg-1.bag-pc.bag .
 ```
 
-A ROS 1 `.bag` file works as input too; it is converted to ROS 2 first. Or run
-with no arguments to use a GUI file selector (requires `zenity`).
+While the bag plays you can watch glass-lio build the map live in RViz, before the algorithm diverges:
 
-| Variable | Default | Meaning |
-|----------|---------|---------|
-| `CONFIG_FILE` | `livox_mid_360.yaml` | glass-lio parameter file: topics, LiDAR-IMU extrinsic, IMU units, voxel sizes. A file on the host, or the name of one in glass-lio's [config/](https://github.com/Tim-HW/glass-lio/tree/main/config) folder |
-| `USE_RVIZ` | `1` | RViz live view |
-| `PLAY_RATE` | `1.0` | ros2 bag play rate (lower it if glass-lio cannot keep up) |
+![glass-lio running in RViz, before the algorithm diverges](images/Rviz.png)
 
-The default `livox_mid_360.yaml` is glass-lio's own configuration for a Livox
-Mid-360 with its built-in IMU. For your own sensor, copy it, set
-`lidar_topic`, `imu_topic`, `imu.accel_in_g` and the LiDAR-IMU extrinsic, and
-pass the file:
+## Step 4 (Open and visualize data)
+Expected data should appear in `~/hdmapping-benchmark/data/output_hdmapping-glass-lio`.
+Use tool [multi_view_tls_registration_step_2](https://github.com/MapsHD/HDMapping) to open `session.json` from `~/hdmapping-benchmark/data/output_hdmapping-glass-lio`.
 
-```bash
-CONFIG_FILE=/path/to/my_sensor.yaml \
-  ./docker_session_run-ros2-glass-lio.sh /path/to/ros2_bag_dir /path/to/output/dir
-```
+![glass-lio session opened in HDMapping multi_view_tls_registration_step_2](images/Step2_1.png)
 
-Before anything starts, the script checks the bag: the LiDAR topic of the
-parameter file is played directly; if it is missing but the bag has a
-`/livox/pointcloud` PointCloud2, `livox_format_bridge` converts that into the
-LiDAR topic; without either, or without the IMU topic, the run stops.
+You can see artifacts after scrolling and rotating:
 
-**What happens:**
+![glass-lio session artifacts in HDMapping multi_view_tls_registration_step_2, after scrolling and rotating](images/Step2_2.png)
 
-The script opens a Docker container with a tmux session containing six panes on
-window 0 and a `control` window (window 1, the attach target):
+You should see the following data in folder `~/hdmapping-benchmark/data/output_hdmapping-glass-lio`:
 
-| Pane | Role |
-|------|------|
-| 0 | `ros2 launch glasslio glasslio.launch.py` — glass-lio |
-| 1 | `ros2 bag record /glasslio_node/odom /glasslio_node/deskewed` |
-| 2 | `ros2 bag play` — plays your input bag |
-| 3 | `livox_format_bridge` — only when the bag needs it |
-| 4 | RViz live view |
-| 5 | diagnostics — shows active topics and publishing rates |
-
-When playback finishes, the control window stops the recorder, kills all nodes
-and RViz, and exits tmux. A second Docker run then converts the recorded bag
-into the HDMapping session format. Logs are written to `<output_dir>/logs/`.
-
-## Step 4 — Open in HDMapping
-
-Output files appear in `<output_dir>/output_hdmapping-glass-lio/`:
-
-```
 lio_initial_poses.reg
+
 poses.reg
-scan_lio_0.laz
-...
+
+scan_lio_*.laz
+
 session.json
-trajectory_lio_0.csv
-...
-```
 
-Open `session.json` with the
-[multi_view_tls_registration_step_2](https://github.com/MapsHD/HDMapping)
-application.
+trajectory_lio_*.csv
 
-## Notes on glass-lio
-
-glass-lio publishes:
-
-| Topic | Type | Meaning |
-|-------|------|---------|
-| `/glasslio_node/odom` | `nav_msgs/Odometry` | the 6-DoF sensor (`livox_frame`) pose in the `odom` frame, one per scan |
-| `/glasslio_node/deskewed` | `sensor_msgs/PointCloud2` | the deskewed scan in the sensor frame, one per scan |
-| `/glasslio_node/local_map` | `sensor_msgs/PointCloud2` | the local voxel map, for display |
-
-The converter records `/glasslio_node/odom` + `/glasslio_node/deskewed` and
-transforms each scan into the world frame with its matching pose. glass-lio
-publishes the deskewed scan only while someone subscribes to it, so the
-recorder is started before playback.
-
-**Timestamps:** the benchmark does not change glass-lio's clock (no
-`use_sim_time`, as in glass-lio's own run scripts). glass-lio stamps its outputs
-with the input scan's header stamp, and `livox_format_bridge` keeps that stamp,
-so the result is in bag time.
-
-## Contact
-
+## Contact email
 januszbedkowski@gmail.com
