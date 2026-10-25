@@ -239,7 +239,10 @@ fi
 '\'' C-m
 
     # ---------- PANE 4: RViz ----------
-    tmux split-window -v -t '"$TMUX_SESSION"'
+    # Split horizontally: the session is created detached at 80x24, which has
+    # room for only three vertical splits (as in the other run scripts); a
+    # fourth one fails and its keys would land in the bridge pane.
+    tmux split-window -h -t '"$TMUX_SESSION"'
     tmux send-keys -t '"$TMUX_SESSION"' '\''sleep 2
 source /opt/ros/humble/setup.bash
 source /ros2_ws/install/setup.bash
