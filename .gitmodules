@@ -1,0 +1,6 @@
+[submodule "src/glass-lio"]
+	path = src/glass-lio
+	url = https://github.com/Tim-HW/glass-lio.git
+[submodule "src/glass-lio-to-hdmapping/src/3rdparty/LASzip"]
+	path = src/glass-lio-to-hdmapping/src/3rdparty/LASzip
+	url = https://github.com/LASzip/LASzip.git
